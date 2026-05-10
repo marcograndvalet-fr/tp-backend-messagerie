@@ -90,7 +90,10 @@
           </ul>
         </div>
         <div class="messages-column">
-          <h3 id="selectedContact">Sélectionnez un contact</h3>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h3 id="selectedContact" style="margin: 0;">Sélectionnez un contact</h3>
+            <button id="filterUnreadBtn" onclick="toggleUnreadFilter()" style="padding: 6px 10px; font-size: 0.9rem; display: none;">Afficher non lus</button>
+          </div>
           <div id="messagesContainer">
             <!-- Messages will be displayed here -->
           </div>
@@ -109,6 +112,7 @@
       
       let currentUser = null;
       let selectedContact = null;
+      let showOnlyUnread = false;
 
       // Initialiser la base de données au chargement de la page
       async function initializeApp() {
@@ -228,6 +232,12 @@
       async function selectContact(contact) {
         selectedContact = contact;
         document.getElementById("selectedContact").textContent = `Chat avec ${contact.name}`;
+        // Réinitialiser le filtre quand on change de contact
+        showOnlyUnread = false;
+        const filterBtn = document.getElementById("filterUnreadBtn");
+        filterBtn.style.backgroundColor = "";
+        filterBtn.style.color = "";
+        filterBtn.textContent = "Afficher non lus";
         displayMessages(contact.name);
       }
 
@@ -241,9 +251,29 @@
             throw new Error("Erreur lors de la récupération des messages");
           }
 
-          const contactMessages = await response.json();
+          const allMessages = await response.json();
           const messagesContainer = document.getElementById("messagesContainer");
+          const filterBtn = document.getElementById("filterUnreadBtn");
+          
+          // Afficher le bouton si y'a des messages
+          filterBtn.style.display = allMessages.length > 0 ? "block" : "none";
+          
+          // Filtrer si nécessaire
+          let contactMessages = allMessages;
+          if (showOnlyUnread) {
+            contactMessages = allMessages.filter(msg => !msg.is_read);
+          }
+          
           messagesContainer.innerHTML = "";
+
+          if (contactMessages.length === 0) {
+            const emptyDiv = document.createElement("div");
+            emptyDiv.style.padding = "20px";
+            emptyDiv.style.textAlign = "center";
+            emptyDiv.style.color = "#999";
+            emptyDiv.textContent = showOnlyUnread ? "Aucun message non lu" : "Aucun message";
+            messagesContainer.appendChild(emptyDiv);
+          }
 
           contactMessages.forEach(msg => {
             const messageDiv = document.createElement("div");
@@ -296,6 +326,24 @@
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         } catch (error) {
           console.error("Erreur:", error);
+        }
+      }
+
+      function toggleUnreadFilter() {
+        showOnlyUnread = !showOnlyUnread;
+        const filterBtn = document.getElementById("filterUnreadBtn");
+        if (showOnlyUnread) {
+          filterBtn.style.backgroundColor = "#4CAF50";
+          filterBtn.style.color = "white";
+          filterBtn.textContent = "Afficher tous";
+        } else {
+          filterBtn.style.backgroundColor = "";
+          filterBtn.style.color = "";
+          filterBtn.textContent = "Afficher non lus";
+        }
+        // Réafficher les messages avec le nouveau filtre
+        if (selectedContact) {
+          displayMessages(selectedContact.name);
         }
       }
 
