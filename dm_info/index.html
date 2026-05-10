@@ -1,0 +1,303 @@
+<!doctype html>
+<html>
+  <head>
+    <style>
+    .messaging-container {
+        display: flex;
+        height: 100vh;
+    }
+
+    .contacts-column {
+        width: 30%;
+        border-right: 1px solid #ccc;
+        padding: 10px;
+    }
+
+    .messages-column {
+        width: 70%;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #contactsList {
+        list-style: none;
+        padding: 0;
+    }
+
+    #contactsList li {
+        padding: 10px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+    }
+
+    #contactsList li:hover {
+        background-color: #f0f0f0;
+    }
+
+    #messagesContainer {
+        flex: 1;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    .message {
+        margin-bottom: 10px;
+        padding: 5px;
+        background-color: #e1f5fe;
+        border-radius: 5px;
+    }
+
+    .message-input {
+        display: flex;
+    }
+
+    .message-input input {
+        flex: 1;
+        padding: 10px;
+    }
+
+    .message-input button {
+        padding: 10px;
+    }
+    </style>
+    </head>
+    <body>
+    <div id="nameSection">
+      <h2>Entrez vos informations :</h2>
+
+      <input type="text" id="nom" placeholder="Votre nom">
+      <input type="email" id="email" placeholder="Votre email">
+      <button onclick="confirmerNom()">Confirmer</button>
+      <p id="resultat"></p>
+    </div>
+
+    <div id="messagingSection" style="display: none;">
+      <div style="padding: 10px; background-color: #f5f5f5; border-bottom: 1px solid #ccc; margin-bottom: 10px;">
+        <h2 id="userNameDisplay"></h2>
+      </div>
+      
+      <div class="messaging-container">
+        <div class="contacts-column">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="margin: 0;">Contacts</h3>
+            <button onclick="loadContacts()" style="padding: 6px 10px; font-size: 0.9rem;">Actualiser</button>
+          </div>
+          <ul id="contactsList">
+            <!-- Contacts will be loaded here -->
+          </ul>
+        </div>
+        <div class="messages-column">
+          <h3 id="selectedContact">Sélectionnez un contact</h3>
+          <div id="messagesContainer">
+            <!-- Messages will be displayed here -->
+          </div>
+          <button id="newMessageBtn" onclick="showMessageInput()">Nouveau message</button>
+          <div class="message-input" id="messageInputDiv" style="display: none;">
+            <input type="text" id="messageInput" placeholder="Tapez votre message...">
+            <button onclick="sendMessage()">Envoyer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE_URL = "http://localhost:8000";
+      
+      let currentUser = null;
+      let selectedContact = null;
+
+      // Initialiser la base de données au chargement de la page
+      async function initializeApp() {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/init`);
+          if (!response.ok) {
+            console.error("Erreur lors de l'initialisation");
+          }
+        } catch (error) {
+          console.error("Erreur de connexion à l'API:", error);
+        }
+      }
+
+      // Appeler l'initialisation quand la page charge
+      window.addEventListener("DOMContentLoaded", initializeApp);
+
+      async function confirmerNom() {
+        const nom = document.getElementById("nom").value;
+        const email = document.getElementById("email").value;
+
+        if (!nom || !email) {
+          document.getElementById("resultat").textContent = "Veuillez remplir tous les champs";
+          document.getElementById("resultat").style.color = "red";
+          return;
+        }
+
+        try {
+          // Créer l'utilisateur dans la base de données
+          const response = await fetch(`${API_BASE_URL}/api/users`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name: nom, email: email }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Erreur lors de la création de l'utilisateur");
+          }
+
+          currentUser = await response.json();
+
+          // Afficher le nom de l'utilisateur
+          document.getElementById("userNameDisplay").textContent = `Bienvenue, ${currentUser.name}!`;
+
+          // Cacher la section nom et afficher la section messagerie
+          document.getElementById("nameSection").style.display = "none";
+          document.getElementById("messagingSection").style.display = "block";
+
+          // Charger les contacts
+          loadContacts();
+        } catch (error) {
+          console.error("Erreur:", error);
+          document.getElementById("resultat").textContent = "Erreur: " + error.message;
+          document.getElementById("resultat").style.color = "red";
+        }
+      }
+
+      async function loadContacts() {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/users`);
+
+          if (!response.ok) {
+            throw new Error("Erreur lors de la récupération des contacts");
+          }
+
+          const contacts = await response.json();
+          const contactsList = document.getElementById("contactsList");
+          contactsList.innerHTML = "";
+
+          contacts.forEach(contact => {
+            // Ne pas afficher l'utilisateur dans sa propre liste de contacts
+            if (contact.id !== currentUser.id) {
+              const li = document.createElement("li");
+              li.style.cursor = "pointer";
+              
+              const statusColor = contact.status === "online" ? "green" : "gray";
+              li.innerHTML = `
+                <span style="color: ${statusColor}; font-weight: bold;">●</span> 
+                ${contact.name}
+                <span style="color: #999; font-size: 0.9em;">(${contact.status})</span>
+              `;
+              
+              li.onclick = () => selectContact(contact);
+              contactsList.appendChild(li);
+            }
+          });
+        } catch (error) {
+          console.error("Erreur:", error);
+        }
+      }
+
+      async function selectContact(contact) {
+        selectedContact = contact;
+        document.getElementById("selectedContact").textContent = `Chat avec ${contact.name}`;
+        displayMessages(contact.name);
+      }
+
+      async function displayMessages(contactName) {
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/api/messages/${currentUser.name}/${contactName}`
+          );
+
+          if (!response.ok) {
+            throw new Error("Erreur lors de la récupération des messages");
+          }
+
+          const contactMessages = await response.json();
+          const messagesContainer = document.getElementById("messagesContainer");
+          messagesContainer.innerHTML = "";
+
+          contactMessages.forEach(msg => {
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "message";
+            messageDiv.style.backgroundColor = msg.sender_name === currentUser.name ? "#c8e6c9" : "#e1f5fe";
+            messageDiv.style.marginLeft = msg.sender_name === currentUser.name ? "50px" : "0";
+            messageDiv.style.marginRight = msg.sender_name === currentUser.name ? "0" : "50px";
+            messageDiv.innerHTML = `<strong>${msg.sender_name}:</strong> ${msg.text}`;
+            messagesContainer.appendChild(messageDiv);
+          });
+
+          // Scroll vers le bas
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } catch (error) {
+          console.error("Erreur:", error);
+        }
+      }
+
+      function showMessageInput() {
+        if (!selectedContact) {
+          alert("Veuillez sélectionner un contact");
+          return;
+        }
+        document.getElementById("messageInputDiv").style.display = "flex";
+        document.getElementById("messageInput").focus();
+      }
+
+      async function sendMessage() {
+        const messageText = document.getElementById("messageInput").value;
+
+        if (!messageText.trim()) {
+          return;
+        }
+
+        if (!selectedContact) {
+          alert("Veuillez sélectionner un contact");
+          return;
+        }
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/messages`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sender_name: currentUser.name,
+              recipient_name: selectedContact.name,
+              text: messageText,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Erreur lors de l'envoi du message");
+          }
+
+          // Réinitialiser l'input
+          document.getElementById("messageInput").value = "";
+          document.getElementById("messageInputDiv").style.display = "none";
+
+          // Afficher les messages mis à jour
+          displayMessages(selectedContact.name);
+        } catch (error) {
+          console.error("Erreur:", error);
+          alert("Erreur lors de l'envoi du message");
+        }
+      }
+
+      // Permettre d'envoyer un message avec Entrée
+      document.addEventListener("DOMContentLoaded", function() {
+        const messageInput = document.getElementById("messageInput");
+        if (messageInput) {
+          messageInput.addEventListener("keypress", function(e) {
+            if (e.key === "Enter") {
+              sendMessage();
+            }
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
