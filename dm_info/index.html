@@ -96,6 +96,7 @@
           </div>
           <button id="newMessageBtn" onclick="showMessageInput()">Nouveau message</button>
           <div class="message-input" id="messageInputDiv" style="display: none;">
+            <input type="text" id="subjectInput" placeholder="Sujet (optionnel)">
             <input type="text" id="messageInput" placeholder="Tapez votre message...">
             <button onclick="sendMessage()">Envoyer</button>
           </div>
@@ -178,23 +179,47 @@
           const contactsList = document.getElementById("contactsList");
           contactsList.innerHTML = "";
 
-          contacts.forEach(contact => {
+          for (const contact of contacts) {
             // Ne pas afficher l'utilisateur dans sa propre liste de contacts
             if (contact.id !== currentUser.id) {
               const li = document.createElement("li");
               li.style.cursor = "pointer";
               
               const statusColor = contact.status === "online" ? "green" : "gray";
-              li.innerHTML = `
-                <span style="color: ${statusColor}; font-weight: bold;">●</span> 
-                ${contact.name}
-                <span style="color: #999; font-size: 0.9em;">(${contact.status})</span>
-              `;
+              
+              // Récupérer les messages non lus de ce contact
+              try {
+                const messagesResponse = await fetch(
+                  `${API_BASE_URL}/api/messages/${currentUser.name}/${contact.name}`
+                );
+                const messages = await messagesResponse.json();
+                const unreadCount = messages.filter(msg => 
+                  msg.sender_name === contact.name && !msg.is_read
+                ).length;
+                
+                let unreadBadge = "";
+                if (unreadCount > 0) {
+                  unreadBadge = ` <span style="background-color: red; color: white; padding: 2px 6px; border-radius: 10px; font-weight: bold;">${unreadCount}</span>`;
+                }
+                
+                li.innerHTML = `
+                  <span style="color: ${statusColor}; font-weight: bold;">●</span> 
+                  ${contact.name}
+                  <span style="color: #999; font-size: 0.9em;">(${contact.status})</span>
+                  ${unreadBadge}
+                `;
+              } catch (error) {
+                li.innerHTML = `
+                  <span style="color: ${statusColor}; font-weight: bold;">●</span> 
+                  ${contact.name}
+                  <span style="color: #999; font-size: 0.9em;">(${contact.status})</span>
+                `;
+              }
               
               li.onclick = () => selectContact(contact);
               contactsList.appendChild(li);
             }
-          });
+          }
         } catch (error) {
           console.error("Erreur:", error);
         }
@@ -226,7 +251,44 @@
             messageDiv.style.backgroundColor = msg.sender_name === currentUser.name ? "#c8e6c9" : "#e1f5fe";
             messageDiv.style.marginLeft = msg.sender_name === currentUser.name ? "50px" : "0";
             messageDiv.style.marginRight = msg.sender_name === currentUser.name ? "0" : "50px";
-            messageDiv.innerHTML = `<strong>${msg.sender_name}:</strong> ${msg.text}`;
+            messageDiv.style.cursor = "pointer";
+            
+            let messageContent = `<strong>${msg.sender_name}</strong><br>`;
+            if (msg.subject && msg.subject.trim()) {
+              messageContent += `Sujet : <em>${msg.subject}</em><br>`;
+            }
+            messageContent += `<span class="message-text" style="display: none;">${msg.text}</span>`;
+            messageContent += `<span class="message-preview">[Cliquez pour voir le message]</span>`;
+            
+            messageDiv.innerHTML = messageContent;
+            messageDiv.style.opacity = msg.is_read ? "1" : "1";
+            
+            messageDiv.onclick = async (e) => {
+              const preview = messageDiv.querySelector(".message-preview");
+              const text = messageDiv.querySelector(".message-text");
+              
+              if (preview.style.display !== "none") {
+                preview.style.display = "none";
+                text.style.display = "inline";
+                
+                // Marquer comme lu
+                if (!msg.is_read) {
+                  try {
+                    await fetch(`${API_BASE_URL}/api/messages/${msg.id}/read`, {
+                      method: "PUT"
+                    });
+                    msg.is_read = true;
+                    loadContacts(); // Rafraîchir les contacts pour mettre à jour le nombre de non-lus
+                  } catch (error) {
+                    console.error("Erreur:", error);
+                  }
+                }
+              } else {
+                preview.style.display = "inline";
+                text.style.display = "none";
+              }
+            };
+            
             messagesContainer.appendChild(messageDiv);
           });
 
@@ -247,6 +309,7 @@
       }
 
       async function sendMessage() {
+        const subjectText = document.getElementById("subjectInput").value;
         const messageText = document.getElementById("messageInput").value;
 
         if (!messageText.trim()) {
@@ -267,6 +330,7 @@
             body: JSON.stringify({
               sender_name: currentUser.name,
               recipient_name: selectedContact.name,
+              subject: subjectText,
               text: messageText,
             }),
           });
@@ -275,7 +339,8 @@
             throw new Error("Erreur lors de l'envoi du message");
           }
 
-          // Réinitialiser l'input
+          // Réinitialiser les inputs
+          document.getElementById("subjectInput").value = "";
           document.getElementById("messageInput").value = "";
           document.getElementById("messageInputDiv").style.display = "none";
 

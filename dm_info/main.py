@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from typing import List, Optional
 from datetime import datetime
@@ -23,7 +24,9 @@ class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     sender_name: str = Field(index=True)
     recipient_name: str = Field(index=True)
+    subject: str = Field(default="")
     text: str
+    is_read: bool = Field(default=False)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -41,7 +44,9 @@ class UserCreate(SQLModel):
 class MessageCreate(SQLModel):
     sender_name: str
     recipient_name: str
+    subject: Optional[str] = None
     text: str
+    is_read: bool = False
 
 
 # Créer les tables
@@ -63,11 +68,10 @@ app.add_middleware(
 def create_user(user: UserCreate):
     """Créer un nouvel utilisateur"""
     with Session(engine) as session:
-        # Vérifier si l'utilisateur existe déjà
+        # Vérifier si l'utilisateur existe déjà        
         existing_user = session.exec(
             select(User).where((User.email == user.email) | (User.name == user.name))
         ).first()
-
         if existing_user:
             return existing_user
 
@@ -107,12 +111,29 @@ def send_message(message: MessageCreate):
         db_message = Message(
             sender_name=message.sender_name,
             recipient_name=message.recipient_name,
-            text=message.text
+            subject=message.subject or "",
+            text=message.text,
+            is_read=message.is_read
         )
         session.add(db_message)
         session.commit()
         session.refresh(db_message)
         return db_message
+
+
+@app.put("/api/messages/{message_id}/read")
+def mark_message_as_read(message_id: int):
+    """Marquer un message comme lu"""
+    with Session(engine) as session:
+        message = session.get(Message, message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message non trouvé")
+        
+        message.is_read = True
+        session.add(message)
+        session.commit()
+        session.refresh(message)
+        return message
 
 
 @app.get("/api/init")
@@ -124,7 +145,13 @@ def init_db():
 
 @app.get("/")
 def read_root():
-    return {"message": "API dm_info avec FastAPI, SQLModel et SQLite est en fonctionnement"}
+    return FileResponse("index.html")
+
+
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+def chrome_devtools():
+    """Endpoint pour Chrome DevTools - évite l'erreur 404"""
+    return {"message": "Chrome DevTools metadata not available"}
 
 
 # WebSocket pour les connexions en temps réel
@@ -163,6 +190,7 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
                 db_message = Message(
                     sender_name=user_name,
                     recipient_name=data.get("recipient_name"),
+                    subject=data.get("subject") or "",
                     text=data.get("text")
                 )
                 session.add(db_message)
@@ -172,6 +200,7 @@ async def websocket_endpoint(websocket: WebSocket, user_name: str):
             await manager.broadcast({
                 "sender": user_name,
                 "recipient": data.get("recipient_name"),
+                "subject": data.get("subject") or "",
                 "text": data.get("text"),
                 "timestamp": datetime.utcnow().isoformat()
             })
