@@ -12,7 +12,7 @@ from pydantic import validator
 DATABASE_URL = "sqlite:///./dm_info.db"
 engine = create_engine(DATABASE_URL, echo=True)
 
-# Modèles SQLModel
+# Modèles SQLModel poour les utilisateurs et les messages
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
@@ -36,7 +36,7 @@ class UserCreate(SQLModel):
 
     @validator('email')
     def validate_email(cls, v):
-        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v): #permet de vérifier que l'email est valide
             raise ValueError('Email invalide')
         return v
 
@@ -49,11 +49,10 @@ class MessageCreate(SQLModel):
     is_read: bool = False
 
 
-# Créer les tables
+# On crée les tables dans la base de données
 SQLModel.metadata.create_all(engine)
 app = FastAPI()
 
-# Ajouter CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,12 +62,12 @@ app.add_middleware(
 )
 
 
-# Endpoints
+# Fonctions API pour créer et récupérer les utilisateurs et les messages
 @app.post("/api/users", response_model=User)
 def create_user(user: UserCreate):
-    """Créer un nouvel utilisateur"""
     with Session(engine) as session:
-        # Vérifier si l'utilisateur existe déjà        
+        # On vérifie si l'utilisateur existe déjà par email ou nom, 
+        # le défaut est que on ne peut pas changer de nom à e-mail fixé   
         existing_user = session.exec(
             select(User).where((User.email == user.email) | (User.name == user.name))
         ).first()
@@ -84,7 +83,6 @@ def create_user(user: UserCreate):
 
 @app.get("/api/users", response_model=List[User])
 def get_users():
-    """Récupérer tous les utilisateurs"""
     with Session(engine) as session:
         users = session.exec(select(User)).all()
         return users
@@ -92,7 +90,6 @@ def get_users():
 
 @app.get("/api/messages/{sender_name}/{recipient_name}", response_model=List[Message])
 def get_messages(sender_name: str, recipient_name: str):
-    """Récupérer les messages entre deux utilisateurs"""
     with Session(engine) as session:
         messages = session.exec(
             select(Message).where(
@@ -100,13 +97,11 @@ def get_messages(sender_name: str, recipient_name: str):
                 ((Message.sender_name == recipient_name) & (Message.recipient_name == sender_name))
             ).order_by(Message.timestamp)
         ).all()
-
         return messages
 
 
 @app.post("/api/messages", response_model=Message)
 def send_message(message: MessageCreate):
-    """Envoyer un message"""
     with Session(engine) as session:
         db_message = Message(
             sender_name=message.sender_name,
@@ -138,7 +133,6 @@ def mark_message_as_read(message_id: int):
 
 @app.get("/api/init")
 def init_db():
-    """Initialiser la base de données sans ajouter d'utilisateurs fictifs"""
     # Les tables sont créées au démarrage avec SQLModel.metadata.create_all(engine)
     return {"message": "Base de données initialisée"}
 
@@ -148,9 +142,10 @@ def read_root():
     return FileResponse("index.html")
 
 
+# J'ai rajouté cette fonction car j'avais une erreur 404 dans la console du navigateur pour ce fichier,
+# J'avour ne pas trop avoir compris mais maintenant ça marche...
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
 def chrome_devtools():
-    """Endpoint pour Chrome DevTools - évite l'erreur 404"""
     return {"message": "Chrome DevTools metadata not available"}
 
 

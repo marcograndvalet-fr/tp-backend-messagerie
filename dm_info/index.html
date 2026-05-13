@@ -86,7 +86,6 @@
             <button onclick="loadContacts()" style="padding: 6px 10px; font-size: 0.9rem;">Actualiser</button>
           </div>
           <ul id="contactsList">
-            <!-- Contacts will be loaded here -->
           </ul>
         </div>
         <div class="messages-column">
@@ -95,7 +94,6 @@
             <button id="filterUnreadBtn" onclick="toggleUnreadFilter()" style="padding: 6px 10px; font-size: 0.9rem; display: none;">Afficher non lus</button>
           </div>
           <div id="messagesContainer">
-            <!-- Messages will be displayed here -->
           </div>
           <button id="newMessageBtn" onclick="showMessageInput()">Nouveau message</button>
           <div class="message-input" id="messageInputDiv" style="display: none;">
@@ -126,7 +124,7 @@
         }
       }
 
-      // Appeler l'initialisation quand la page charge
+
       window.addEventListener("DOMContentLoaded", initializeApp);
 
       async function confirmerNom() {
@@ -155,14 +153,10 @@
 
           currentUser = await response.json();
 
-          // Afficher le nom de l'utilisateur
           document.getElementById("userNameDisplay").textContent = `Bienvenue, ${currentUser.name}!`;
-
-          // Cacher la section nom et afficher la section messagerie
           document.getElementById("nameSection").style.display = "none";
           document.getElementById("messagingSection").style.display = "block";
 
-          // Charger les contacts
           loadContacts();
         } catch (error) {
           console.error("Erreur:", error);
@@ -184,7 +178,7 @@
           contactsList.innerHTML = "";
 
           for (const contact of contacts) {
-            // Ne pas afficher l'utilisateur dans sa propre liste de contacts
+            // Ne pas afficher l'utilisateur dans sa propre liste de contacts (sinon il apprait deux fois)
             if (contact.id !== currentUser.id) {
               const li = document.createElement("li");
               li.style.cursor = "pointer";
@@ -232,7 +226,6 @@
       async function selectContact(contact) {
         selectedContact = contact;
         document.getElementById("selectedContact").textContent = `Chat avec ${contact.name}`;
-        // Réinitialiser le filtre quand on change de contact
         showOnlyUnread = false;
         const filterBtn = document.getElementById("filterUnreadBtn");
         filterBtn.style.backgroundColor = "";
@@ -255,10 +248,8 @@
           const messagesContainer = document.getElementById("messagesContainer");
           const filterBtn = document.getElementById("filterUnreadBtn");
           
-          // Afficher le bouton si y'a des messages
           filterBtn.style.display = allMessages.length > 0 ? "block" : "none";
           
-          // Filtrer si nécessaire
           let contactMessages = allMessages;
           if (showOnlyUnread) {
             contactMessages = allMessages.filter(msg => !msg.is_read);
@@ -301,14 +292,14 @@
                 preview.style.display = "none";
                 text.style.display = "inline";
                 
-                // Marquer comme lu
+                // Marquer comme lu en cliquant sur le message
                 if (!msg.is_read) {
                   try {
                     await fetch(`${API_BASE_URL}/api/messages/${msg.id}/read`, {
                       method: "PUT"
                     });
                     msg.is_read = true;
-                    loadContacts(); // Rafraîchir les contacts pour mettre à jour le nombre de non-lus
+                    loadContacts(); // Rafraîchir les contacts pour mettre à jour le nombre de non-lus sinon erreur...
                   } catch (error) {
                     console.error("Erreur:", error);
                   }
@@ -322,7 +313,6 @@
             messagesContainer.appendChild(messageDiv);
           });
 
-          // Scroll vers le bas
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         } catch (error) {
           console.error("Erreur:", error);
@@ -341,7 +331,6 @@
           filterBtn.style.color = "";
           filterBtn.textContent = "Afficher non lus";
         }
-        // Réafficher les messages avec le nouveau filtre
         if (selectedContact) {
           displayMessages(selectedContact.name);
         }
@@ -387,12 +376,10 @@
             throw new Error("Erreur lors de l'envoi du message");
           }
 
-          // Réinitialiser les inputs
           document.getElementById("subjectInput").value = "";
           document.getElementById("messageInput").value = "";
           document.getElementById("messageInputDiv").style.display = "none";
 
-          // Afficher les messages mis à jour
           displayMessages(selectedContact.name);
         } catch (error) {
           console.error("Erreur:", error);
@@ -400,7 +387,6 @@
         }
       }
 
-      // Permettre d'envoyer un message avec Entrée
       document.addEventListener("DOMContentLoaded", function() {
         const messageInput = document.getElementById("messageInput");
         if (messageInput) {

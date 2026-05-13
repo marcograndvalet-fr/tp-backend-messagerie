@@ -1,0 +1,20 @@
+### 1. En quoi HTTP convient-il bien à cette application ?
+
+HTTP est adapté puisque les actions que l'on fait correspondent à des requêtes. 
+Envoyer des messages et cliquer sur un message non lu correspond à des requêtes POST et 
+actualiser la messagerie est une requête GET
+
+### 2. Quelles limites apparaissent si l’on veut une vraie messagerie “vivante” ?
+
+Pour que le serveur envoie quelque chose le client est obligé de faire une requête.
+Donc le bouton actualiser est nécéssaire si on veut voir si on a de nouveaux messages.
+Pour savoir qu'un message à été reçu on peut faire des requêtes régulières au serveur; 
+de même cela peut permettre d'éviter le bouton actualiser
+
+### 3. Quelle solution pourrait-on introduire ensuite ?
+Grace à Websocket le serveur peut envoyer des événements dès qu’un nouveau message arrive,
+le client reçoit immédiatement les notifications sans attendre un nouveau GET.
+
+
+Pour lancer le serveur : uvicorn main:app --reload --host 0.0.0.0 --port 8000
+Puis dans le navigateur : http://127.0.0.1:8000
